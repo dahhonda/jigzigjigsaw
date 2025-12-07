@@ -148,6 +148,20 @@ pub fn draw(ctx: jok.Context) !void {
     try ctx.renderer().clear(.rgb(128, 128, 128));
     var b = try batchpool.new(.{ .depth_sort = .back_to_forth });
     defer b.submit();
+
+    // もとのピースの配置が分かるようにグリッドを表示
+    for (state.pieces) |p| {
+        const rect = jok.Rectangle{
+            .x = p.correctPos.x,
+            .y = p.correctPos.y,
+            .width = @floatFromInt(state.picture.pieceWidth),
+            .height = @floatFromInt(state.picture.pieceHeight),
+        };
+        const color = jok.Color{ .r = 240, .g = 240, .b = 240 };
+        try b.rect(rect, color, .{});
+    }
+
+    // ピースの描画
     for (state.pieces) |p| {
         p.picture.setRenderOptions(.{
             .pos = p.currentPos,
