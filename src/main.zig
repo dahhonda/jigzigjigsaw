@@ -43,6 +43,7 @@ const Piece = struct {
 const GamePhase = enum {
     initial,
     playing,
+    completed,
 };
 const GameState = struct {
     phase: GamePhase,
@@ -120,7 +121,7 @@ pub fn init(ctx: jok.Context) !void {
 
 pub fn event(ctx: jok.Context, e: jok.Event) !void {
     switch (state.phase) {
-        .initial => {
+        .initial, .completed => {
             switch (e) {
                 .mouse_button_down => {
                     shufflePieces(ctx);
@@ -164,13 +165,19 @@ pub fn event(ctx: jok.Context, e: jok.Event) !void {
                             state.pieces[index].is_correct = true;
                         }
 
-                        // 残りのピース数をタイトルに表示
                         const remain = getIncorrectPieceCount();
-                        const title = try std.fmt.allocPrint(ctx.allocator(), "じぐじぐじぐそー: 完成まで残り {d} 枚！", .{remain});
-                        defer ctx.allocator().free(title);
-                        const titleZ = try ctx.allocator().dupeZ(u8, title);
-                        defer ctx.allocator().free(titleZ);
-                        try ctx.window().setTitle(titleZ);
+                        if (remain == 0) {
+                            // 残りピース0枚なら完成
+                            try ctx.window().setTitle("じぐじぐじぐそー: 完成おめでとう！");
+                            state.phase = .completed;
+                        } else {
+                            // 残りのピース数をタイトルに表示
+                            const title = try std.fmt.allocPrint(ctx.allocator(), "じぐじぐじぐそー: 完成まで残り {d} 枚！", .{remain});
+                            defer ctx.allocator().free(title);
+                            const titleZ = try ctx.allocator().dupeZ(u8, title);
+                            defer ctx.allocator().free(titleZ);
+                            try ctx.window().setTitle(titleZ);
+                        }
 
                         state.dragging_piece_index = null;
                     }
@@ -188,6 +195,7 @@ fn shufflePieces(ctx: jok.Context) void {
             .x = @floatFromInt(rng.random().intRangeAtMost(u32, 0, ctx.window().getSize().width - state.picture.piece_width)),
             .y = @floatFromInt(rng.random().intRangeAtMost(u32, 0, ctx.window().getSize().height - state.picture.piece_height)),
         };
+        state.pieces[i].is_correct = false;
     }
 }
 
@@ -249,7 +257,7 @@ pub fn draw(ctx: jok.Context) !void {
     // ピースの描画
     for (state.pieces) |p| {
         var tint_color = jok.Color.white;
-        if (p.is_correct) {
+        if (state.phase != .completed and p.is_correct) {
             tint_color = .{ .a = 128, .r = 255, .g = 255, .b = 0 };
         }
         p.picture.setRenderOptions(.{
