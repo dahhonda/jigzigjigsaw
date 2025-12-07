@@ -36,6 +36,7 @@ const Piece = struct {
     picture: *j2d.Scene.Object,
     current_pos: jok.Point,
     correct_pos: jok.Point,
+    is_correct: bool,
 };
 
 // ゲームの状態
@@ -101,6 +102,7 @@ pub fn init(ctx: jok.Context) !void {
                 .picture = obj,
                 .current_pos = pos,
                 .correct_pos = pos,
+                .is_correct = false,
             };
             const idx = r * puzzle_pic.cols + c;
             state.pieces[idx] = piece;
@@ -133,6 +135,11 @@ pub fn event(ctx: jok.Context, e: jok.Event) !void {
                 .mouse_button_down => |m| {
                     if (state.dragging_piece_index == null) {
                         if (findPieceIndexAt(m.pos)) |index| {
+                            // すでに正しい位置にあるピースは移動対象外
+                            if (state.pieces[index].is_correct) {
+                                return;
+                            }
+
                             state.dragging_piece_index = index;
                             movePieceCenterTo(index, m.pos);
 
@@ -148,7 +155,23 @@ pub fn event(ctx: jok.Context, e: jok.Event) !void {
                     }
                 },
                 .mouse_button_up => {
-                    if (state.dragging_piece_index != null) {
+                    if (state.dragging_piece_index) |index| {
+                        // ピースを放した時の位置が正解の位置から一定距離以内なら、
+                        // 正解後に移動させてそれ以上動かせないようにする。
+                        var piece = state.pieces[index];
+                        if (piece.current_pos.distance(piece.correct_pos) <= 16) {
+                            state.pieces[index].current_pos = piece.correct_pos;
+                            state.pieces[index].is_correct = true;
+                        }
+
+                        // 残りのピース数をタイトルに表示
+                        const remain = getIncorrectPieceCount();
+                        const title = try std.fmt.allocPrint(ctx.allocator(), "じぐじぐじぐそー: 完成まで残り {d} 枚！", .{remain});
+                        defer ctx.allocator().free(title);
+                        const titleZ = try ctx.allocator().dupeZ(u8, title);
+                        defer ctx.allocator().free(titleZ);
+                        try ctx.window().setTitle(titleZ);
+
                         state.dragging_piece_index = null;
                     }
                 },
@@ -192,6 +215,16 @@ fn movePieceCenterTo(piece_index: usize, pos: jok.Point) void {
     };
 }
 
+fn getIncorrectPieceCount() u32 {
+    var count: u32 = 0;
+    for (state.pieces) |p| {
+        if (!p.is_correct) {
+            count += 1;
+        }
+    }
+    return count;
+}
+
 pub fn update(ctx: jok.Context) !void {
     _ = ctx;
 }
@@ -215,8 +248,13 @@ pub fn draw(ctx: jok.Context) !void {
 
     // ピースの描画
     for (state.pieces) |p| {
+        var tint_color = jok.Color.white;
+        if (p.is_correct) {
+            tint_color = .{ .a = 128, .r = 255, .g = 255, .b = 0 };
+        }
         p.picture.setRenderOptions(.{
             .pos = p.current_pos,
+            .tint_color = tint_color,
         });
     }
     try b.scene(scene);
