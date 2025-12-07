@@ -18,24 +18,24 @@ const JigsawPicture = struct {
     name: [*:0]const u8,
     rows: u32,
     cols: u32,
-    pieceWidth: u32,
-    pieceHeight: u32,
+    piece_width: u32,
+    piece_height: u32,
 };
 const pictures = [_]JigsawPicture{
     .{
         .name = "images/programming_master",
         .rows = 8,
         .cols = 8,
-        .pieceWidth = 128,
-        .pieceHeight = 70,
+        .piece_width = 128,
+        .piece_height = 70,
     },
 };
 
 // パズルのピース
 const Piece = struct {
     picture: *j2d.Scene.Object,
-    currentPos: jok.Point,
-    correctPos: jok.Point,
+    current_pos: jok.Point,
+    correct_pos: jok.Point,
 };
 
 // ゲームの状態
@@ -47,13 +47,13 @@ const GameState = struct {
     phase: GamePhase,
     picture: JigsawPicture,
     pieces: []Piece,
-    draggingPieceIndex: ?usize,
+    dragging_piece_index: ?usize,
 };
 var state = GameState{
     .phase = .initial,
     .picture = undefined,
     .pieces = &[_]Piece{},
-    .draggingPieceIndex = null,
+    .dragging_piece_index = null,
 };
 
 pub fn init(ctx: jok.Context) !void {
@@ -66,15 +66,15 @@ pub fn init(ctx: jok.Context) !void {
 
     // パズル画像からランダムなものを読み込む
     rng = std.Random.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
-    const puzzlePic = pictures[rng.random().uintLessThan(usize, pictures.len)];
+    const puzzle_pic = pictures[rng.random().uintLessThan(usize, pictures.len)];
     sheet = try j2d.SpriteSheet.fromPicturesInDir(
         ctx,
-        puzzlePic.name,
+        puzzle_pic.name,
         2560.0,
         1920.0,
         .{},
     );
-    state.picture = puzzlePic;
+    state.picture = puzzle_pic;
 
     batchpool = try @TypeOf(batchpool).init(ctx);
     scene = try j2d.Scene.create(ctx.allocator());
@@ -82,16 +82,16 @@ pub fn init(ctx: jok.Context) !void {
     const margin: u32 = 64;
 
     // 各ピースのスプライトから2Dオブジェクトを作り、正解の位置に移動する。
-    state.pieces = try ctx.allocator().alloc(Piece, puzzlePic.rows * puzzlePic.cols);
+    state.pieces = try ctx.allocator().alloc(Piece, puzzle_pic.rows * puzzle_pic.cols);
     var r: u32 = 0;
-    while (r < puzzlePic.rows) : (r += 1) {
+    while (r < puzzle_pic.rows) : (r += 1) {
         var c: u32 = 0;
-        while (c < puzzlePic.cols) : (c += 1) {
+        while (c < puzzle_pic.cols) : (c += 1) {
             const filename = try std.fmt.allocPrint(ctx.allocator(), "r{d:0>2}_c{d:0>2}", .{ r, c });
             defer ctx.allocator().free(filename);
             const pos = jok.Point{
-                .x = @floatFromInt(margin + c * puzzlePic.pieceWidth),
-                .y = @floatFromInt(margin + r * puzzlePic.pieceHeight),
+                .x = @floatFromInt(margin + c * puzzle_pic.piece_width),
+                .y = @floatFromInt(margin + r * puzzle_pic.piece_height),
             };
             const obj = try j2d.Scene.Object.create(ctx.allocator(), .{
                 .sprite = sheet.getSpriteByName(filename).?,
@@ -99,10 +99,10 @@ pub fn init(ctx: jok.Context) !void {
             }, null);
             const piece = Piece{
                 .picture = obj,
-                .currentPos = pos,
-                .correctPos = pos,
+                .current_pos = pos,
+                .correct_pos = pos,
             };
-            const idx = r * puzzlePic.cols + c;
+            const idx = r * puzzle_pic.cols + c;
             state.pieces[idx] = piece;
             try scene.root.addChild(piece.picture);
         }
@@ -111,8 +111,8 @@ pub fn init(ctx: jok.Context) !void {
     // パズル画像のサイズに合わせてウィンドウサイズを変更
     const window = ctx.window();
     try window.setSize(.{
-        .width = margin * 2 + puzzlePic.pieceWidth * puzzlePic.cols,
-        .height = margin * 2 + puzzlePic.pieceHeight * puzzlePic.rows,
+        .width = margin * 2 + puzzle_pic.piece_width * puzzle_pic.cols,
+        .height = margin * 2 + puzzle_pic.piece_height * puzzle_pic.rows,
     });
 }
 
@@ -131,9 +131,9 @@ pub fn event(ctx: jok.Context, e: jok.Event) !void {
         .playing => {
             switch (e) {
                 .mouse_button_down => |m| {
-                    if (state.draggingPieceIndex == null) {
+                    if (state.dragging_piece_index == null) {
                         if (findPieceIndexAt(m.pos)) |index| {
-                            state.draggingPieceIndex = index;
+                            state.dragging_piece_index = index;
                             movePieceCenterTo(index, m.pos);
 
                             // ドラッグ中のピースは一番上に描画されるようにする
@@ -143,13 +143,13 @@ pub fn event(ctx: jok.Context, e: jok.Event) !void {
                     }
                 },
                 .mouse_motion => |m| {
-                    if (state.draggingPieceIndex) |index| {
+                    if (state.dragging_piece_index) |index| {
                         movePieceCenterTo(index, m.pos);
                     }
                 },
                 .mouse_button_up => {
-                    if (state.draggingPieceIndex != null) {
-                        state.draggingPieceIndex = null;
+                    if (state.dragging_piece_index != null) {
+                        state.dragging_piece_index = null;
                     }
                 },
                 else => {},
@@ -161,9 +161,9 @@ pub fn event(ctx: jok.Context, e: jok.Event) !void {
 fn shufflePieces(ctx: jok.Context) void {
     var i: u32 = 0;
     while (i < state.pieces.len) : (i += 1) {
-        state.pieces[i].currentPos = jok.Point{
-            .x = @floatFromInt(rng.random().intRangeAtMost(u32, 0, ctx.window().getSize().width - state.picture.pieceWidth)),
-            .y = @floatFromInt(rng.random().intRangeAtMost(u32, 0, ctx.window().getSize().height - state.picture.pieceHeight)),
+        state.pieces[i].current_pos = jok.Point{
+            .x = @floatFromInt(rng.random().intRangeAtMost(u32, 0, ctx.window().getSize().width - state.picture.piece_width)),
+            .y = @floatFromInt(rng.random().intRangeAtMost(u32, 0, ctx.window().getSize().height - state.picture.piece_height)),
         };
     }
 }
@@ -173,10 +173,10 @@ fn findPieceIndexAt(pos: jok.Point) ?usize {
     while (i > 0) {
         i -= 1;
         var rect = jok.Rectangle{
-            .x = state.pieces[i].currentPos.x,
-            .y = state.pieces[i].currentPos.y,
-            .width = @floatFromInt(state.picture.pieceWidth),
-            .height = @floatFromInt(state.picture.pieceHeight),
+            .x = state.pieces[i].current_pos.x,
+            .y = state.pieces[i].current_pos.y,
+            .width = @floatFromInt(state.picture.piece_width),
+            .height = @floatFromInt(state.picture.piece_height),
         };
         if (rect.containsPoint(pos)) {
             return i;
@@ -185,10 +185,10 @@ fn findPieceIndexAt(pos: jok.Point) ?usize {
     return null;
 }
 
-fn movePieceCenterTo(pieceIndex: usize, pos: jok.Point) void {
-    state.pieces[pieceIndex].currentPos = .{
-        .x = pos.x - @as(f32, @floatFromInt(state.picture.pieceWidth)) / 2.0,
-        .y = pos.y - @as(f32, @floatFromInt(state.picture.pieceHeight)) / 2.0,
+fn movePieceCenterTo(piece_index: usize, pos: jok.Point) void {
+    state.pieces[piece_index].current_pos = .{
+        .x = pos.x - @as(f32, @floatFromInt(state.picture.piece_width)) / 2.0,
+        .y = pos.y - @as(f32, @floatFromInt(state.picture.piece_height)) / 2.0,
     };
 }
 
@@ -204,10 +204,10 @@ pub fn draw(ctx: jok.Context) !void {
     // もとのピースの配置が分かるようにグリッドを表示
     for (state.pieces) |p| {
         const rect = jok.Rectangle{
-            .x = p.correctPos.x,
-            .y = p.correctPos.y,
-            .width = @floatFromInt(state.picture.pieceWidth),
-            .height = @floatFromInt(state.picture.pieceHeight),
+            .x = p.correct_pos.x,
+            .y = p.correct_pos.y,
+            .width = @floatFromInt(state.picture.piece_width),
+            .height = @floatFromInt(state.picture.piece_height),
         };
         const color = jok.Color{ .r = 240, .g = 240, .b = 240 };
         try b.rect(rect, color, .{});
@@ -216,7 +216,7 @@ pub fn draw(ctx: jok.Context) !void {
     // ピースの描画
     for (state.pieces) |p| {
         p.picture.setRenderOptions(.{
-            .pos = p.currentPos,
+            .pos = p.current_pos,
         });
     }
     try b.scene(scene);
