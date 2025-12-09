@@ -21,15 +21,19 @@ const JigsawPicture = struct {
     piece_width: u32,
     piece_height: u32,
 };
-const pictures = [_]JigsawPicture{
-    .{
-        .name = "images/programming_master",
-        .rows = 8,
-        .cols = 8,
-        .piece_width = 128,
-        .piece_height = 70,
-    },
-};
+const pictures = [_]JigsawPicture{ .{
+    .name = "images/programming_master",
+    .rows = 8,
+    .cols = 8,
+    .piece_width = 128,
+    .piece_height = 70,
+}, .{
+    .name = "images/spotch_onboarding",
+    .rows = 5,
+    .cols = 5,
+    .piece_width = 144,
+    .piece_height = 128,
+} };
 
 // パズルのピース
 const Piece = struct {
