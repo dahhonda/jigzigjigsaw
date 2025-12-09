@@ -88,6 +88,17 @@ pub fn init(ctx: jok.Context) !void {
     const margin: u32 = 64;
 
     // 各ピースのスプライトから2Dオブジェクトを作り、正解の位置に移動する。
+    try loadPieces(ctx, puzzle_pic, margin);
+
+    // パズル画像のサイズに合わせてウィンドウサイズを変更
+    const window = ctx.window();
+    try window.setSize(.{
+        .width = margin * 2 + puzzle_pic.piece_width * puzzle_pic.cols,
+        .height = margin * 2 + puzzle_pic.piece_height * puzzle_pic.rows,
+    });
+}
+
+fn loadPieces(ctx: jok.Context, puzzle_pic: JigsawPicture, margin: u32) !void {
     state.pieces = try ctx.allocator().alloc(Piece, puzzle_pic.rows * puzzle_pic.cols);
     var r: u32 = 0;
     while (r < puzzle_pic.rows) : (r += 1) {
@@ -114,13 +125,6 @@ pub fn init(ctx: jok.Context) !void {
             try scene.root.addChild(piece.picture);
         }
     }
-
-    // パズル画像のサイズに合わせてウィンドウサイズを変更
-    const window = ctx.window();
-    try window.setSize(.{
-        .width = margin * 2 + puzzle_pic.piece_width * puzzle_pic.cols,
-        .height = margin * 2 + puzzle_pic.piece_height * puzzle_pic.rows,
-    });
 }
 
 pub fn event(ctx: jok.Context, e: jok.Event) !void {
