@@ -8,57 +8,54 @@ const j2d = jok.j2d;
 const physfs = jok.physfs;
 
 var rng: std.Random.DefaultPrng = undefined; // 乱数生成器
-var sheet: *j2d.SpriteSheet = undefined; // スプライト。使う画像をあらかじめ読み込んでおく
 var batchpool: j2d.BatchPool(64, false) = undefined; // 描画を高速化するのに使うっぽい
+var sheet: *j2d.SpriteSheet = undefined; // スプライトシート。使う画像をあらかじめ読み込んでおくのに使うっぽい
 var scene: *j2d.Scene = undefined; // 描画先
 
-// ジグソーパズルとして分割する画像。
-// 画像を追加するときはここを修正する。
+// ジグソーパズルの正解画像
 const JigsawPicture = struct {
-    name: [*:0]const u8,
-    rows: u32,
-    cols: u32,
-    piece_width: u32,
-    piece_height: u32,
+    name: [*:0]const u8, //  ファイル名。 [*:0]const u8 はC言語の文字列のようにヌル終端する文字列を表す型らしい？
+    rows: u32, // 何行に分割されるか
+    cols: u32, // 何列に分割されるか
+    piece_width: u32, // ピースの横幅
+    piece_height: u32, // ピースの縦幅
 };
-const pictures = [_]JigsawPicture{ .{
-    .name = "images/programming_master",
-    .rows = 8,
-    .cols = 8,
-    .piece_width = 128,
-    .piece_height = 70,
-}, .{
-    .name = "images/spotch_onboarding",
-    .rows = 5,
-    .cols = 5,
-    .piece_width = 144,
-    .piece_height = 128,
-} };
+const pictures = [_]JigsawPicture{
+    .{
+        .name = "images/spotch_onboarding",
+        .rows = 5,
+        .cols = 5,
+        .piece_width = 144,
+        .piece_height = 128,
+    },
+};
 
 // パズルのピース
 const Piece = struct {
-    picture: *j2d.Scene.Object,
+    picture: *j2d.Scene.Object, // *で始まる型はC言語でもおなじみのポインタ。ただし、nullにはできない
     current_pos: jok.Point,
     correct_pos: jok.Point,
     is_correct: bool,
 };
 
-// ゲームの状態
+// ゲームの進行状況
 const GamePhase = enum {
     initial,
     playing,
     completed,
 };
+
+// ゲームの状態
 const GameState = struct {
     phase: GamePhase,
     picture: JigsawPicture,
-    pieces: []Piece,
-    dragging_piece_index: ?usize,
+    pieces: []Piece, // []で始まる型は配列？ Goにもあるようなスライス型かも
+    dragging_piece_index: ?usize, // ?で始まる型はオプショナル。nullを代入できる
 };
 var state = GameState{
     .phase = .initial,
-    .picture = undefined,
-    .pieces = &[_]Piece{},
+    .picture = undefined, // init関数で初期化するからここではundefined
+    .pieces = undefined, // init関数で初期化するからここではundefined
     .dragging_piece_index = null,
 };
 
@@ -70,24 +67,15 @@ pub fn init(ctx: jok.Context) !void {
         try physfs.mount("assets", "", true);
     }
 
-    // パズル画像からランダムなものを読み込む
-    rng = std.Random.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
-    const puzzle_pic = pictures[rng.random().uintLessThan(usize, pictures.len)];
-    sheet = try j2d.SpriteSheet.fromPicturesInDir(
-        ctx,
-        puzzle_pic.name,
-        2560.0,
-        1920.0,
-        .{},
-    );
-    state.picture = puzzle_pic;
-
     batchpool = try @TypeOf(batchpool).init(ctx);
     scene = try j2d.Scene.create(ctx.allocator());
 
-    const margin: u32 = 64;
+    // 用意されているパズル画像からランダムなものを選ぶ
+    rng = std.Random.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
+    const puzzle_pic = pictures[rng.random().uintLessThan(usize, pictures.len)];
 
-    // 各ピースのスプライトから2Dオブジェクトを作り、正解の位置に移動する。
+    // 各ピースのスプライトから2Dオブジェクトを作り、正解の位置に移動する
+    const margin: u32 = 64;
     try loadPieces(ctx, puzzle_pic, margin);
 
     // パズル画像のサイズに合わせてウィンドウサイズを変更
@@ -98,22 +86,43 @@ pub fn init(ctx: jok.Context) !void {
     });
 }
 
-fn loadPieces(ctx: jok.Context, puzzle_pic: JigsawPicture, margin: u32) !void {
+fn loadPieces(
+    ctx: jok.Context,
+    puzzle_pic: JigsawPicture,
+    margin: u32,
+) !void { // 戻り値の前に ! が付いているのは、エラーを返す可能性がある関数
+
+    // Zigでは、メモリの確保と解放はAllocatorという型のオブジェクトを使って手動で行わないといけない。GCは無い。
+    // jokでは、ctx引数から取得したAllocatorを使っとけばよさそう
     state.pieces = try ctx.allocator().alloc(Piece, puzzle_pic.rows * puzzle_pic.cols);
-    var r: u32 = 0;
-    while (r < puzzle_pic.rows) : (r += 1) {
-        var c: u32 = 0;
-        while (c < puzzle_pic.cols) : (c += 1) {
-            const filename = try std.fmt.allocPrint(ctx.allocator(), "r{d:0>2}_c{d:0>2}", .{ r, c });
-            defer ctx.allocator().free(filename);
+    state.picture = puzzle_pic;
+
+    // 指定ディレクトリ内のピース画像を読み込んでスプライトシートにする。
+    // 少し上でも出てきたが、tryはエラーが返ってきたらそのエラーをすぐreturnするシンタックスシュガー。
+    // エラーを返す可能性がある関数を呼び出すときは、tryなり何なりでエラー処理しないとコンパイルエラーになる
+    sheet = try j2d.SpriteSheet.fromPicturesInDir(ctx, puzzle_pic.name, 2560.0, 1920.0, .{});
+
+    for (0..puzzle_pic.rows) |r| {
+        for (0..puzzle_pic.cols) |c| {
+            // ピースの正解の位置を計算
             const pos = jok.Point{
+                // 初見では @ が何か特別な構文に見えるけど、Zigのビルトイン関数は全て @ で始まる名前をしているというだけ。
+                // （ユーザは @ で始まる名前の関数を定義できない）
                 .x = @floatFromInt(margin + c * puzzle_pic.piece_width),
                 .y = @floatFromInt(margin + r * puzzle_pic.piece_height),
             };
+
+            // r行目,c列目のピースの画像をスプライトシートから取得する。
+            // ここのallocPrintの呼び出しは、C言語でいうsprintf("r%02d_%02d", r, c)みたいな感じ
+            const filename = try std.fmt.allocPrint(ctx.allocator(), "r{d:0>2}_c{d:0>2}", .{ r, c });
+            // 確保したメモリをその関数内で確実に解放したいなら、Goと同じようにdeferを使える
+            defer ctx.allocator().free(filename);
             const obj = try j2d.Scene.Object.create(ctx.allocator(), .{
-                .sprite = sheet.getSpriteByName(filename).?,
+                .sprite = sheet.getSpriteByName(filename),
                 .render_opt = .{ .pos = pos },
             }, null);
+
+            // ピースの画像や位置などを設定
             const piece = Piece{
                 .picture = obj,
                 .current_pos = pos,
@@ -122,6 +131,7 @@ fn loadPieces(ctx: jok.Context, puzzle_pic: JigsawPicture, margin: u32) !void {
             };
             const idx = r * puzzle_pic.cols + c;
             state.pieces[idx] = piece;
+
             try scene.root.addChild(piece.picture);
         }
     }
@@ -166,7 +176,7 @@ pub fn event(ctx: jok.Context, e: jok.Event) !void {
                 .mouse_button_up => {
                     if (state.dragging_piece_index) |index| {
                         // ピースを放した時の位置が正解の位置から一定距離以内なら、
-                        // 正解後に移動させてそれ以上動かせないようにする。
+                        // 正解の位置に移動させてそれ以上動かせないようにする。
                         var piece = state.pieces[index];
                         if (piece.current_pos.distance(piece.correct_pos) <= 16) {
                             state.pieces[index].current_pos = piece.correct_pos;
@@ -197,8 +207,7 @@ pub fn event(ctx: jok.Context, e: jok.Event) !void {
 }
 
 fn shufflePieces(ctx: jok.Context) void {
-    var i: u32 = 0;
-    while (i < state.pieces.len) : (i += 1) {
+    for (0..state.pieces.len) |i| {
         state.pieces[i].current_pos = jok.Point{
             .x = @floatFromInt(rng.random().intRangeAtMost(u32, 0, ctx.window().getSize().width - state.picture.piece_width)),
             .y = @floatFromInt(rng.random().intRangeAtMost(u32, 0, ctx.window().getSize().height - state.picture.piece_height)),
@@ -266,6 +275,7 @@ pub fn draw(ctx: jok.Context) !void {
     for (state.pieces) |p| {
         var tint_color = jok.Color.white;
         if (state.phase != .completed and p.is_correct) {
+            // 正解位置にあるピースは黄色っぽくする
             tint_color = .{ .a = 128, .r = 255, .g = 255, .b = 0 };
         }
         p.picture.setRenderOptions(.{
