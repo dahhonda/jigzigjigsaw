@@ -113,7 +113,7 @@ fn loadPieces(
             };
 
             // r行目,c列目のピースの画像をスプライトシートから取得する。
-            // ここのallocPrintの呼び出しは、C言語でいうsprintf("r%02d_%02d", r, c)みたいな感じ
+            // ここのallocPrintの呼び出しは、C言語でいうsprintf("r%02d_c%02d", r, c)みたいな感じ
             const filename = try std.fmt.allocPrint(ctx.allocator(), "r{d:0>2}_c{d:0>2}", .{ r, c });
             // 確保したメモリをその関数内で確実に解放したいなら、Goと同じようにdeferを使える
             defer ctx.allocator().free(filename);

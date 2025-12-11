@@ -16,9 +16,9 @@ from PIL import Image
 def main():
     parser = argparse.ArgumentParser(
         description=dedent("""\
-            画像をrow行 x col列に分割する。
+            画像をrows行 x cols列に分割する。
             分割された画像は、元画像から拡張子を取り除いた名前のフォルダに保存される。
-            元画像の縦幅がrowで割り切れないか、横幅がcolで割り切れない場合、エラー。
+            元画像の縦幅がrowsで割り切れないか、横幅がcolsで割り切れない場合、エラー。
         """)
     )
     parser.add_argument("image", help="分割する画像のパス")
