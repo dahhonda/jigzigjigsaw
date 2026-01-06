@@ -154,11 +154,6 @@ pub fn event(ctx: jok.Context, e: jok.Event) !void {
                 .mouse_button_down => |m| {
                     if (state.dragging_piece_index == null) {
                         if (findPieceIndexAt(m.pos)) |index| {
-                            // すでに正しい位置にあるピースは移動対象外
-                            if (state.pieces[index].is_correct) {
-                                return;
-                            }
-
                             state.dragging_piece_index = index;
                             movePieceCenterTo(index, m.pos);
 
@@ -220,6 +215,10 @@ fn findPieceIndexAt(pos: jok.Point) ?usize {
     var i = state.pieces.len;
     while (i > 0) {
         i -= 1;
+        // すでに正しい位置にあるピースは移動対象外
+        if (state.pieces[i].is_correct) {
+            continue;
+        }
         var rect = jok.Rectangle{
             .x = state.pieces[i].current_pos.x,
             .y = state.pieces[i].current_pos.y,
