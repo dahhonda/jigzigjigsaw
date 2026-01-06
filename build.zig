@@ -29,7 +29,9 @@ pub fn build(b: *std.Build) void {
             "src/main.zig",
             target,
             optimize,
-            .{},
+            .{
+                .preload_path = "assets",
+            },
         );
         b.getInstallStep().dependOn(&webapp.emlink.step);
 
