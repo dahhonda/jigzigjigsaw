@@ -49,3 +49,15 @@ https://{username}.github.io/{repository}/zig-out/web/jigzigjigsaw.html
     - チップ: Apple M1 Pro
     - メモリ: 16 GB
     - macOS: Sequoia 15.6.1
+
+
+## 今すぐプレイ
+
+弊社創業者の福野([@taisukef](https://github.com/taisukef))さんが、WASMビルド対応とGitHub Pagesでの公開をしてくださいました。
+下記のURLからプレイできます！
+
+https://taisukef.github.io/jigzigjigsaw/zig-out/web/jigzigjigsaw.html
+
+
+福野さんありがとうございました！
+
